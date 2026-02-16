@@ -53,12 +53,29 @@ Vector<FlyString> NamedNodeMap::supported_property_names() const
 {
     // 1. Let names be the qualified names of the attributes in this NamedNodeMap object’s attribute list, with duplicates omitted, in order.
     Vector<FlyString> names;
-    names.ensure_capacity(m_attributes.size());
 
-    for (auto const& attribute : m_attributes) {
-        auto const attribute_name = attribute->name();
-        if (!names.contains_slow(attribute_name))
-            names.append(attribute_name.to_string());
+    if (true || m_attributes.size() <= 10) {
+        //dbgln("HOT PATH: {}", m_attributes.size());
+        // Hot path: If there are 10 attributes or fewer, then avoid any additional allocation overhead:
+        names.ensure_capacity(m_attributes.size());
+        for (auto const& attribute : m_attributes) {
+            auto const attribute_name = attribute->name();
+            if (!names.contains_slow(attribute_name))
+                names.append(attribute_name.to_string());
+        }
+    } else {
+        dbgln("COLD PATH: {}", m_attributes.size());
+        // The hot path goes through all previous attributes in linear time, in each iteration, resulting in quadratic time.
+        // This can be avoided: Use additional data structures to check in O(1) time whether a name has already been seen.
+        HashTable<FlyString> names_seen;
+        for (auto const& attribute : m_attributes) {
+            auto const attribute_name = attribute->name();
+            if (!names_seen.contains(attribute_name)) {
+                FlyString attribute_string = attribute_name.to_string();
+                names.append(attribute_string);
+                names_seen.set(attribute_string);
+            }
+        }
     }
 
     // 2. If this NamedNodeMap object’s element is in the HTML namespace and its node document is an HTML document, then for each name of names:
